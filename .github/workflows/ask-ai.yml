@@ -1,25 +1,49 @@
 name: Ask AI
+
 on:
   workflow_dispatch:
-
-permissions:
-  models: read
 
 jobs:
   ask-ai:
     runs-on: ubuntu-latest
-  
+
     steps:
-      - name: AI Inference
-        id: ai-response
-        uses: actions/ai-inference@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            Give me a programming joke.
-  
-      - name: Display AI Response
+      - name: Call Azure OpenAI
+        id: ai
+
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+
+        run: |
+          RESPONSE=$(curl -s \
+            -X POST \
+            "$AZURE_OPENAI_ENDPOINT/openai/deployments/$AZURE_OPENAI_DEPLOYMENT/chat/completions?api-version=2025-01-01-preview" \
+            -H "Content-Type: application/json" \
+            -H "api-key: $AZURE_OPENAI_KEY" \
+            -d '{
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Give me a programming joke."
+                }
+              ],
+              "max_tokens": 300
+            }')
+
+          echo "$RESPONSE"
+
+          CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+
+          {
+            echo "response<<EOF"
+            echo "$CONTENT"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Display Response
         run: |
           echo "## 🤖 AI Response" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.ai-response.outputs.response }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.ai.outputs.response }}" >> $GITHUB_STEP_SUMMARY
